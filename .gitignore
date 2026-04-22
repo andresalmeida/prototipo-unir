@@ -1,0 +1,48 @@
+# ───── Python ─────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+
+# ───── Entornos virtuales ─────
+venv/
+env/
+.venv/
+ENV/
+
+# ───── Jupyter ─────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ───── IDEs / Editores ─────
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# ───── macOS ─────
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# ───── Streamlit ─────
+.streamlit/secrets.toml
+
+# ───── Variables de entorno ─────
+.env
+.env.local
+
+# ───── Logs ─────
+*.log
+logs/
+
+# ───── Datos sensibles / pesados (NO ignorar processed que sí necesita el dashboard) ─────
+data/raw/
+data/intermediate/
+*.dump
+*.sql.gz
