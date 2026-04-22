@@ -34,39 +34,27 @@ st.set_page_config(**PAGE_CONFIG)
 
 st.markdown("""
 <style>
-    /* Estilo minimalista profesional */
+    /* Estilo minimalista profesional - hereda colores del tema */
     [data-testid="stMetricValue"] {
         font-size: 1.8rem;
         font-weight: 600;
-        color: #ffffff !important;
     }
-    
-    [data-testid="stMetricLabel"] {
-        color: #e5e7eb !important;
-    }
-    
-    [data-testid="stMetricDelta"] {
-        color: #d1d5db !important;
-    }
-    
+
     h1 {
-        color: #111827;
         font-weight: 700;
         padding-bottom: 0.5rem;
-        border-bottom: 2px solid #e5e7eb;
+        border-bottom: 2px solid rgba(255, 255, 255, 0.1);
     }
-    
+
     h2 {
-        color: #374151;
         font-weight: 600;
         margin-top: 2rem;
     }
-    
+
     h3 {
-        color: #4b5563;
         font-weight: 600;
     }
-    
+
     .stAlert {
         border-radius: 4px;
     }
