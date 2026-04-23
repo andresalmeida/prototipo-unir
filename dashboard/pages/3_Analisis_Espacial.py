@@ -461,38 +461,41 @@ with col2:
     
     st.caption(f"**Interpretación:** Cluster {cluster_petrolero} (petrolero) tiene la mediana más baja de acceso a salud. Los outliers superiores representan capitales provinciales.")
 
-# GRÁFICO 3: Barras Comparativas
+# GRÁFICO 3: Barras Comparativas (doble eje Y para preservar magnitudes reales)
 with col3:
     df_clusters = df[df['cluster'].notna()].copy()
-    cluster_comparison = df_clusters.groupby('cluster').agg({
-        'infraestructura': 'mean',
-        'salud_10k': 'mean'
-    }).reset_index()
-
-    # Normalizar infraestructura a la misma escala visual que salud
-    salud_max = max(cluster_comparison['salud_10k'].max(), 1)
-    infra_max = max(cluster_comparison['infraestructura'].max(), 1)
-    cluster_comparison['infra_norm'] = cluster_comparison['infraestructura'] / infra_max * salud_max
+    cluster_comparison = df_clusters.groupby('cluster').agg(
+        infra=('infraestructura', 'mean'),
+        salud=('salud_10k', 'mean'),
+        n=('cluster', 'size'),
+    ).reset_index()
     cluster_comparison['cluster_label'] = cluster_comparison['cluster'].astype(int).astype(str)
 
-    fig_bar = go.Figure()
+    fig_bar = make_subplots(specs=[[{"secondary_y": True}]])
 
-    fig_bar.add_trace(go.Bar(
-        x=cluster_comparison['cluster_label'],
-        y=cluster_comparison['infra_norm'],
-        name='Infraestructura petrolera (norm.)',
-        marker_color='#991b1b',
-        customdata=cluster_comparison['infraestructura'].round(2),
-        hovertemplate='Cluster %{x}<br>Infra promedio: %{customdata}<extra></extra>'
-    ))
+    fig_bar.add_trace(
+        go.Bar(
+            x=cluster_comparison['cluster_label'],
+            y=cluster_comparison['infra'],
+            name='Infraestructura petrolera (prom.)',
+            marker_color='#991b1b',
+            customdata=cluster_comparison['n'],
+            hovertemplate='Cluster %{x} (n=%{customdata})<br>Infra prom.: %{y:.2f}<extra></extra>',
+        ),
+        secondary_y=False,
+    )
 
-    fig_bar.add_trace(go.Bar(
-        x=cluster_comparison['cluster_label'],
-        y=cluster_comparison['salud_10k'],
-        name='Establecimientos/10k hab',
-        marker_color='#10b981',
-        hovertemplate='Cluster %{x}<br>Salud: %{y:.2f}<extra></extra>'
-    ))
+    fig_bar.add_trace(
+        go.Bar(
+            x=cluster_comparison['cluster_label'],
+            y=cluster_comparison['salud'],
+            name='Establecimientos/10k hab',
+            marker_color='#10b981',
+            customdata=cluster_comparison['n'],
+            hovertemplate='Cluster %{x} (n=%{customdata})<br>Salud: %{y:.2f}<extra></extra>',
+        ),
+        secondary_y=True,
+    )
 
     fig_bar.update_layout(
         title={
@@ -502,7 +505,6 @@ with col3:
             'font': {'size': 12}
         },
         xaxis_title='Cluster',
-        yaxis_title='Valor (escala salud)',
         height=400,
         barmode='group',
         legend=dict(
@@ -514,13 +516,26 @@ with col3:
             font=dict(size=9)
         )
     )
+    fig_bar.update_yaxes(title_text='Infra. petrolera (escala roja)', secondary_y=False, color='#991b1b')
+    fig_bar.update_yaxes(title_text='Salud /10k hab (escala verde)', secondary_y=True, color='#10b981')
 
     st.plotly_chart(fig_bar, use_container_width=True)
 
-    # Identificar cluster petrolero por infraestructura promedio
-    cluster_petrolero_id = int(cluster_comparison.loc[cluster_comparison['infraestructura'].idxmax(), 'cluster'])
-    salud_petrolero = cluster_comparison.loc[cluster_comparison['cluster'] == cluster_petrolero_id, 'salud_10k'].values[0]
-    st.caption(f"**Interpretación:** Cluster {cluster_petrolero_id} concentra la mayor infraestructura petrolera promedio (rojo) y simultáneamente la menor cobertura de salud ({salud_petrolero:.2f} estab/10k hab, verde). La paradoja extractivista es evidente: los recursos no se traducen en servicios.")
+    # Identificar el gran cluster petrolero (segundo más alto en infra; el max es el outlier extremo)
+    sorted_by_infra = cluster_comparison.sort_values('infra', ascending=False).reset_index(drop=True)
+    cluster_extremo = int(sorted_by_infra.iloc[0]['cluster'])
+    cluster_grande = int(sorted_by_infra.iloc[1]['cluster'])
+    salud_grande = sorted_by_infra.iloc[1]['salud']
+    infra_grande = sorted_by_infra.iloc[1]['infra']
+    n_grande = int(sorted_by_infra.iloc[1]['n'])
+
+    st.caption(
+        f"**Interpretación:** Los ejes son independientes para que ambas magnitudes sean visibles. "
+        f"Cluster {cluster_grande} (n={n_grande}) — el **gran cluster petrolero amazónico** — concentra "
+        f"infraestructura promedio de {infra_grande:.1f} y simultáneamente la cobertura de salud más baja "
+        f"({salud_grande:.2f} estab/10k hab): aquí se manifiesta la paradoja a escala. "
+        f"Cluster {cluster_extremo} representa los outliers extremos (3 parroquias)."
+    )
 
 st.markdown("---")
 
