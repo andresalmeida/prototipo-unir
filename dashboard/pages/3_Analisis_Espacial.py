@@ -319,14 +319,34 @@ with col4:
     
     st.plotly_chart(fig4, use_container_width=True)
     
-    # Contar parroquias por cluster
-    c0 = (df['cluster'] == 0).sum()
-    c1 = (df['cluster'] == 1).sum()
-    c2 = (df['cluster'] == 2).sum()
-    c3 = (df['cluster'] == 3).sum()
+    # Caracterizar cada cluster dinámicamente con los datos reales
+    df_valid = df[df['cluster'].notna()].copy()
+    cluster_profile = df_valid.groupby('cluster').agg(
+        n=('cluster', 'size'),
+        infra_mean=('infraestructura', 'mean'),
+        salud_mean=('salud_10k', 'mean'),
+        afro_mean=('pct_afro', 'mean'),
+    ).round(2)
+
+    c_petrolero_extremo = cluster_profile['infra_mean'].idxmax()              # outliers extremos
+    c_petrolero_grande = cluster_profile['infra_mean'].nlargest(2).index[1]   # gran cluster petrolero
+    c_afro = cluster_profile['afro_mean'].idxmax()                            # afroecuatoriano
+    c_intermedio = [c for c in cluster_profile.index
+                    if c not in (c_petrolero_extremo, c_petrolero_grande, c_afro)][0]  # restante
+
     sin_cluster = df['cluster'].isna().sum()
-    
-    st.caption(f"**Interpretación:** K-Means identifica 4 grupos distintos. Cluster 0 (azul, n={c0}): baja actividad petrolera. Cluster 1 (rojo, n={c1}): **alta actividad petrolera en Amazonía**. Cluster 2 (verde, n={c2}): sin petróleo, mejor salud. Cluster 3 (naranja, n={c3}): alta población afroecuatoriana en Esmeraldas. Gris (n={sin_cluster}): sin datos completos. El tamaño indica densidad petrolera (infra/km²).")
+
+    st.caption(
+        f"**Interpretación:** K-Means identifica 4 grupos. "
+        f"Cluster {int(c_petrolero_grande)} (rojo, n={int(cluster_profile.loc[c_petrolero_grande,'n'])}): "
+        f"**gran cluster petrolero amazónico** (infra prom. {cluster_profile.loc[c_petrolero_grande,'infra_mean']:.1f}). "
+        f"Cluster {int(c_petrolero_extremo)} (naranja, n={int(cluster_profile.loc[c_petrolero_extremo,'n'])}): "
+        f"**outliers extremos** (infra prom. {cluster_profile.loc[c_petrolero_extremo,'infra_mean']:.0f}, máxima densidad). "
+        f"Cluster {int(c_afro)} (verde, n={int(cluster_profile.loc[c_afro,'n'])}): "
+        f"**comunidades afroecuatorianas** ({cluster_profile.loc[c_afro,'afro_mean']:.0f}% afro, sin petróleo, mejor salud). "
+        f"Cluster {int(c_intermedio)} (azul, n={int(cluster_profile.loc[c_intermedio,'n'])}): baja actividad petrolera, salud moderada. "
+        f"Gris (n={sin_cluster}): sin datos completos. El tamaño del punto indica densidad petrolera."
+    )
 
 st.markdown("---")
 
@@ -443,31 +463,37 @@ with col2:
 
 # GRÁFICO 3: Barras Comparativas
 with col3:
-    cluster_comparison = df.groupby('cluster').agg({
-        'densidad_petroleo': 'mean',
+    df_clusters = df[df['cluster'].notna()].copy()
+    cluster_comparison = df_clusters.groupby('cluster').agg({
+        'infraestructura': 'mean',
         'salud_10k': 'mean'
     }).reset_index()
-    
-    # Normalizar para comparación visual
-    cluster_comparison['densidad_norm'] = cluster_comparison['densidad_petroleo'] / cluster_comparison['densidad_petroleo'].max() * 20
-    cluster_comparison['salud_norm'] = cluster_comparison['salud_10k']
-    
+
+    # Normalizar infraestructura a la misma escala visual que salud
+    salud_max = max(cluster_comparison['salud_10k'].max(), 1)
+    infra_max = max(cluster_comparison['infraestructura'].max(), 1)
+    cluster_comparison['infra_norm'] = cluster_comparison['infraestructura'] / infra_max * salud_max
+    cluster_comparison['cluster_label'] = cluster_comparison['cluster'].astype(int).astype(str)
+
     fig_bar = go.Figure()
-    
+
     fig_bar.add_trace(go.Bar(
-        x=cluster_comparison['cluster'],
-        y=cluster_comparison['densidad_norm'],
-        name='Densidad Petrolera (norm)',
-        marker_color='#991b1b'
+        x=cluster_comparison['cluster_label'],
+        y=cluster_comparison['infra_norm'],
+        name='Infraestructura petrolera (norm.)',
+        marker_color='#991b1b',
+        customdata=cluster_comparison['infraestructura'].round(2),
+        hovertemplate='Cluster %{x}<br>Infra promedio: %{customdata}<extra></extra>'
     ))
-    
+
     fig_bar.add_trace(go.Bar(
-        x=cluster_comparison['cluster'],
-        y=cluster_comparison['salud_norm'],
+        x=cluster_comparison['cluster_label'],
+        y=cluster_comparison['salud_10k'],
         name='Establecimientos/10k hab',
-        marker_color='#10b981'
+        marker_color='#10b981',
+        hovertemplate='Cluster %{x}<br>Salud: %{y:.2f}<extra></extra>'
     ))
-    
+
     fig_bar.update_layout(
         title={
             'text': 'Paradoja: Petróleo Alto = Salud Baja',
@@ -476,7 +502,7 @@ with col3:
             'font': {'size': 12}
         },
         xaxis_title='Cluster',
-        yaxis_title='Valor',
+        yaxis_title='Valor (escala salud)',
         height=400,
         barmode='group',
         legend=dict(
@@ -488,9 +514,13 @@ with col3:
             font=dict(size=9)
         )
     )
-    
+
     st.plotly_chart(fig_bar, use_container_width=True)
-    st.caption(f"**Interpretación:** Cluster {cluster_petrolero} tiene alta densidad petrolera (rojo) pero baja salud (verde). La paradoja extractivista es evidente: los recursos no se traducen en servicios.")
+
+    # Identificar cluster petrolero por infraestructura promedio
+    cluster_petrolero_id = int(cluster_comparison.loc[cluster_comparison['infraestructura'].idxmax(), 'cluster'])
+    salud_petrolero = cluster_comparison.loc[cluster_comparison['cluster'] == cluster_petrolero_id, 'salud_10k'].values[0]
+    st.caption(f"**Interpretación:** Cluster {cluster_petrolero_id} concentra la mayor infraestructura petrolera promedio (rojo) y simultáneamente la menor cobertura de salud ({salud_petrolero:.2f} estab/10k hab, verde). La paradoja extractivista es evidente: los recursos no se traducen en servicios.")
 
 st.markdown("---")
 
@@ -565,7 +595,22 @@ with col4:
     Salud: {cluster_stats_full.loc[3, 'Salud Promedio']:.2f}
     """)
 
-st.caption(f"**Interpretación:** Cluster {int(cluster_petrolero)} concentra la mayor actividad petrolera en Amazonía. Cluster {int(cluster_salud)} tiene el mejor acceso a salud sin petróleo. Cluster {int(cluster_afro)} presenta la mayor población afroecuatoriana en Esmeraldas. Cluster 0 representa parroquias con características intermedias.")
+# Identificar el "gran cluster petrolero" (el segundo más alto en infra, ya que el max es el outlier extremo)
+cluster_petrolero_grande = cluster_stats_full['Infraestructura Promedio'].nlargest(2).index[1]
+cluster_petrolero_extremo = cluster_stats_full['Infraestructura Promedio'].idxmax()
+
+st.caption(
+    f"**Interpretación:** Cluster {int(cluster_petrolero_grande)} es el **gran cluster petrolero amazónico** "
+    f"({int(cluster_stats_full.loc[cluster_petrolero_grande, 'Num. Parroquias'])} parroquias, "
+    f"infra prom. {cluster_stats_full.loc[cluster_petrolero_grande, 'Infraestructura Promedio']:.2f}). "
+    f"Cluster {int(cluster_petrolero_extremo)} agrupa **outliers extremos** "
+    f"({int(cluster_stats_full.loc[cluster_petrolero_extremo, 'Num. Parroquias'])} parroquias con infra prom. "
+    f"{cluster_stats_full.loc[cluster_petrolero_extremo, 'Infraestructura Promedio']:.0f}). "
+    f"Cluster {int(cluster_afro)} concentra **población afroecuatoriana** "
+    f"({cluster_stats_full.loc[cluster_afro, '% Afro Promedio']:.1f}% afro promedio) sin actividad petrolera. "
+    f"Cluster {int(cluster_salud)} representa parroquias con mejor cobertura de salud "
+    f"({cluster_stats_full.loc[cluster_salud, 'Salud Promedio']:.2f} estab/10k hab)."
+)
 
 st.markdown("---")
 st.caption("TFM - Máster en Visual Analytics and Big Data | 2025")
